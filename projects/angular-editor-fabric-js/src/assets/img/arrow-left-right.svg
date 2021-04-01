@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<svg xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://web.resource.org/cc/" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:svg="http://www.w3.org/2000/svg" id="svg2679" viewBox="0 0 401.05 187.39" version="1.0">
+  <defs id="defs2681">
+    <linearGradient id="linearGradient2646" x1="244.86" gradientUnits="userSpaceOnUse" y1="827.01" gradientTransform="matrix(-.94876 0 0 .43346 -8.1131 57.559)" x2="244.86" y2="646.06">
+      <stop id="stop1695" stop-color="#fff" stop-opacity="0" offset="0"/>
+      <stop id="stop1696" stop-color="#fff" offset="1"/>
+    </linearGradient>
+    <linearGradient id="linearGradient2642" x1="-92.987" xlink:href="#linearGradient1683" gradientUnits="userSpaceOnUse" y1="-477.7" gradientTransform="matrix(0 .94620 .43463 0 -8.1131 57.559)" x2="315.01" y2="-477.7"/>
+    <linearGradient id="linearGradient1683">
+      <stop id="stop1684" stop-color="#68db0c" offset="0"/>
+      <stop id="stop1685" stop-color="#387606" offset="1"/>
+    </linearGradient>
+    <linearGradient id="linearGradient2640" x1="303.9" xlink:href="#linearGradient1683" gradientUnits="userSpaceOnUse" y1="-492.41" gradientTransform="matrix(0 .94620 .43463 0 -8.1131 57.559)" x2="-93.993" y2="-492.41"/>
+  </defs>
+  <g id="layer1" transform="translate(-149.48 -438.67)">
+    <g id="g2649" transform="translate(585.06 111.53)" fill-rule="evenodd">
+      <path id="path2603" stroke-linejoin="round" d="m-320.84 329.94l-111.94 90.09 111.94 91.69v-45.44h171.56v45.44l111.94-91.69-111.94-90.09v45.44h-171.56v-45.44z" stroke="url(#linearGradient2642)" stroke-width="5.6113" fill="url(#linearGradient2640)"/>
+      <path id="path2605" fill="url(#linearGradient2646)" d="m-327.75 345.19l-93.97 75.22 93.97 16.43h19.81v0.13h165.5l93.94-16.47-93.94-75.19v37.94h-160.62v-0.13h-24.69v-37.93z"/>
+    </g>
+  </g>
+  <metadata>
+    <rdf:RDF>
+      <cc:Work>
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+        <cc:license rdf:resource="http://creativecommons.org/licenses/publicdomain/"/>
+        <dc:publisher>
+          <cc:Agent rdf:about="http://openclipart.org/">
+            <dc:title>Openclipart</dc:title>
+          </cc:Agent>
+        </dc:publisher>
+        <dc:title>Arrow left-right</dc:title>
+        <dc:date>2007-03-27T03:19:49</dc:date>
+        <dc:description>Based on arrow-right-yellow_benji_01.svg from the old openclipart packages</dc:description>
+        <dc:source>http://openclipart.org/detail/3677/arrow-left-right-by-torfnase</dc:source>
+        <dc:creator>
+          <cc:Agent>
+            <dc:title>torfnase</dc:title>
+          </cc:Agent>
+        </dc:creator>
+        <dc:subject>
+          <rdf:Bag>
+            <rdf:li>arrow</rdf:li>
+            <rdf:li>both</rdf:li>
+            <rdf:li>button</rdf:li>
+            <rdf:li>clip art</rdf:li>
+            <rdf:li>clipart</rdf:li>
+            <rdf:li>direction</rdf:li>
+            <rdf:li>green</rdf:li>
+            <rdf:li>icon</rdf:li>
+            <rdf:li>image</rdf:li>
+            <rdf:li>left</rdf:li>
+            <rdf:li>media</rdf:li>
+            <rdf:li>png</rdf:li>
+            <rdf:li>public domain</rdf:li>
+            <rdf:li>right</rdf:li>
+            <rdf:li>svg</rdf:li>
+          </rdf:Bag>
+        </dc:subject>
+      </cc:Work>
+      <cc:License rdf:about="http://creativecommons.org/licenses/publicdomain/">
+        <cc:permits rdf:resource="http://creativecommons.org/ns#Reproduction"/>
+        <cc:permits rdf:resource="http://creativecommons.org/ns#Distribution"/>
+        <cc:permits rdf:resource="http://creativecommons.org/ns#DerivativeWorks"/>
+      </cc:License>
+    </rdf:RDF>
+  </metadata>
+</svg>

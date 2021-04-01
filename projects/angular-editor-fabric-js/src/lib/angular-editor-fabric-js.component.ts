@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, AfterViewInit, HostListener, Output, EventEmitter } from '@angular/core';
 import { fabric } from 'fabric';
 
 @Component({
@@ -6,8 +6,14 @@ import { fabric } from 'fabric';
   templateUrl: './angular-editor-fabric-js.component.html',
   styleUrls: ['./angular-editor-fabric-js.component.css'],
 })
+
 export class FabricjsEditorComponent implements AfterViewInit {
   @ViewChild('htmlCanvas') htmlCanvas: ElementRef;
+  @Output() updateActiveTool = new EventEmitter<string>();
+
+  updateTool(value: string) {
+    this.updateActiveTool.emit(value);
+  }
 
   private canvas: fabric.Canvas;
   public props = {
@@ -28,19 +34,118 @@ export class FabricjsEditorComponent implements AfterViewInit {
 
   public textString: string;
   public url: string | ArrayBuffer = '';
-  public size: any = {
-    width: 500,
-    height: 800
-  };
 
   public json: any;
-  private globalEditor = false;
-  public textEditor = false;
-  private imageEditor = false;
-  public figureEditor = false;
   public selected: any;
+  public origX: any;
+  public origY: any;
+
+  public activeSelection = null;
+  public isDrawingLineMode = false;
+  public isDrawingPathMode = false;
+  public isDrawingTextMode = false;
+  public activeTool = null;
+
+  public drawingObject: any = null;
+
+  public isDrawingPath = false;
+  public pathToDraw;
+  public updatedPath;
+  public isMouseDown = false;
+  public isDrawingCurve = false;
+  public rememberX;
+  public rememberY;
+
+  getCanvasWidthAndHeight = () => {
+    return {
+      // width: document.getElementById('canvasContainer').offsetWidth,
+      // height: document.getElementById('canvasContainer').offsetHeight
+      width: 1024,
+      height: 768
+    }
+  }
+
+  public size: any = this.getCanvasWidthAndHeight();
+
+  @HostListener('document:keydown', ['$event'])
+  handleKeyboardEvent(event: any) {
+    switch (event.key) {
+      case 'Delete':
+        if (event.target.nodeName !== "TEXTAREA" && event.target.nodeName !== "INPUT") {
+          this.canvas.getActiveObjects().forEach(obj => {
+            this.canvas.remove(obj);
+          });
+          this.canvas.discardActiveObject().requestRenderAll();
+          this.canvas.trigger('object:modified');
+        }
+        break;
+      case 'Escape':
+        if (this.isDrawingPath) {
+          this.cancelPathDrawing();
+        } else {
+          this.cancelDrawing();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  @HostListener('window:resize', ['$event'])
+  onResize(event) {
+    this.size = this.getCanvasWidthAndHeight();
+    this.setCanvasSize();
+  }
+
+  public minZoom = 0.05;
+  public maxZoom = 3;
+
+  @HostListener('mousewheel', ['$event'])
+  mouseZoom(e) {
+    // if (!e.ctrlKey) return;
+    e.preventDefault()
+  
+    let updatedZoom: any = this.canvas.getZoom().toFixed(2)
+    let zoomAmount: any = (e.deltaY > 0) ? -5 : 5;
+    updatedZoom = ((updatedZoom * 100) + zoomAmount) / 100
+    if (updatedZoom < this.minZoom || updatedZoom > this.maxZoom) return;
+    this.applyZoom(updatedZoom);
+  }
+
+  applyZoom = (zoom) => {
+    this.canvas.setZoom(zoom);
+    this.canvas.setWidth(this.size.width * this.canvas.getZoom());
+    this.canvas.setHeight(this.size.height * this.canvas.getZoom());
+  }
 
   constructor() { }
+
+  cancelDrawing = () => {
+    this.resetSelection();
+    this.drawingObject = null;
+    this.setActiveTool('select');
+  }
+
+  resetSelection() {
+    this.origX = null;
+    this.origY = null;
+  }
+
+  inRange = (radius, cursorX, cursorY, targetX, targetY) => {
+    if (
+      Math.abs(cursorX - targetX) <= radius &&
+      Math.abs(cursorY - targetY) <= radius
+    ) {
+      return true
+    }
+
+    return false
+  }
+
+  setCanvasSize = () => {
+    this.canvas.setWidth(this.size.width);
+    this.canvas.setHeight(this.size.height);
+  }
 
   ngAfterViewInit(): void {
 
@@ -48,99 +153,444 @@ export class FabricjsEditorComponent implements AfterViewInit {
     this.canvas = new fabric.Canvas(this.htmlCanvas.nativeElement, {
       hoverCursor: 'pointer',
       selection: true,
-      selectionBorderColor: 'blue'
+      selectionBorderColor: 'blue',
+      preserveObjectStacking: true,
+      svgViewportTransformation: false
     });
 
+    fabric.Object.prototype.transparentCorners = false;
+    fabric.Object.prototype.cornerStyle = 'circle';
+    fabric.Object.prototype.borderColor = '#C00000';
+    fabric.Object.prototype.cornerColor = '#C00000';
+    fabric.Object.prototype.cornerStrokeColor = '#FFF';
+    fabric.Object.prototype.padding = 0;
+
     this.canvas.on({
-      'object:moving': (e) => { },
-      'object:modified': (e) => { },
-      'object:selected': (e) => {
+      'mouse:down': (o) => {
+        let inst = this;
+        let pointer = inst.canvas.getPointer(o.e);
+        this.origX = pointer.x;
+        this.origY = pointer.y;
+        switch (this.activeTool) {
+          case 'rect':
+            this.drawingObject = new fabric.Rect({
+              left: this.origX,
+              top: this.origY,
+              width: pointer.x - this.origX,
+              height: pointer.y - this.origY,
+              noScaleCache: false,
+              strokeUniform: true,
+            });
+            this.extend(this.drawingObject, this.randomId());
+            inst.canvas.add(this.drawingObject);
+            break;
+          case 'line':
+            let pointerPoints = [this.origX, this.origY, this.origX, this.origY];
+            this.drawingObject = new fabric.Line(pointerPoints, {
+              strokeWidth: 1,
+              stroke: '#000000'
+            });
+            this.drawingObject.strokeUniform = true;
+            this.extend(this.drawingObject, this.randomId());
+            inst.canvas.add(this.drawingObject);
+            break;
+          case 'path':
+            this.isMouseDown = true;
+            this.isDrawingPath = true;
 
-        const selectedObject = e.target;
-        this.selected = selectedObject;
-        selectedObject.hasRotatingPoint = true;
-        selectedObject.transparentCorners = false;
-        selectedObject.cornerColor = 'rgba(255, 87, 34, 0.7)';
+            // if first point, no extras, just place the point
+            if (!this.drawingObject) {
+              this.drawingObject = new fabric.Path(`M${pointer.x} ${pointer.y} L${pointer.x} ${pointer.y}`, {
+                strokeWidth: 1,
+                stroke: '#000000',
+                fill: 'transparent'
+              });
 
-        this.resetPanels();
+              this.drawingObject.selectable = false;
+              this.drawingObject.evented = false;
+              this.drawingObject.strokeUniform = true;
+              inst.canvas.add(this.drawingObject);
 
-        if (selectedObject.type !== 'group' && selectedObject) {
+              return
+            }
 
-          this.getId();
-          this.getOpacity();
+            // not the first point, add a new line
+            if (this.drawingObject) {
+              this.drawingObject.path.push(['L', pointer.x, pointer.y])
 
-          switch (selectedObject.type) {
-            case 'rect':
-            case 'circle':
-            case 'triangle':
-              this.figureEditor = true;
-              this.getFill();
-              break;
-            case 'i-text':
-              this.textEditor = true;
-              this.getLineHeight();
-              this.getCharSpacing();
-              this.getBold();
-              this.getFill();
-              this.getTextDecoration();
-              this.getTextAlign();
-              this.getFontFamily();
-              break;
-            case 'image':
-              break;
-          }
+              // recalc path dimensions
+              let dims = this.drawingObject._calcDimensions()
+              this.drawingObject.set({
+                width: dims.width,
+                height: dims.height,
+                left: dims.left,
+                top: dims.top,
+                pathOffset: {
+                  x: dims.width / 2 + dims.left,
+                  y: dims.height / 2 + dims.top
+                },
+                dirty: true
+              });
+
+              this.drawingObject.setCoords();
+              inst.canvas.renderAll();
+
+              return
+            }
+            break;
+          case 'textbox':
+            this.drawingObject = new fabric.Rect({
+              left: this.origX,
+              top: this.origY,
+              width: pointer.x - this.origX,
+              height: pointer.y - this.origY,
+              strokeWidth: 1,
+              stroke: '#C00000',
+              fill: 'rgba(192, 0, 0, 0.2)',
+              transparentCorners: false
+            });
+            this.canvas.add(this.drawingObject);
+            break;
+          default:
+            break;
         }
       },
-      'selection:cleared': (e) => {
-        this.selected = null;
-        this.resetPanels();
+      'mouse:move': (o: any) => {
+        if (!this.drawingObject) return;
+        let inst = this;
+        let pointer = inst.canvas.getPointer(o.e);
+
+        switch (this.activeTool) {
+          case 'rect':
+            this.drawingObject.stroke = '#000';
+            this.drawingObject.strokeWidth = 1;
+            this.drawingObject.fill = 'transparent';
+
+            if (this.origX > pointer.x) {
+              this.drawingObject.set({
+                left: Math.abs(pointer.x)
+              });
+            }
+            if (this.origY > pointer.y) {
+              this.drawingObject.set({
+                top: Math.abs(pointer.y)
+              });
+            }
+
+            this.drawingObject.set({
+              width: Math.abs(this.origX - pointer.x),
+              height: Math.abs(this.origY - pointer.y)
+            });
+
+            this.drawingObject.setCoords();
+            inst.canvas.renderAll();
+            break;
+          case 'line':
+            if (o.e.shiftKey) {
+              // calc angle
+              let startX = this.origX;
+              let startY = this.origY;
+              let x2 = pointer.x - this.origX
+              let y2 = pointer.y - this.origY
+              let r = Math.sqrt(x2 * x2 + y2 * y2)
+              let angle: any = (Math.atan2(y2, x2) / Math.PI * 180)
+
+              angle = (((angle + 7.5) % 360) / 15) * 15;
+
+              let cosx = r * Math.cos(angle * Math.PI / 180)
+              let sinx = r * Math.sin(angle * Math.PI / 180)
+
+              this.drawingObject.set({
+                x2: cosx + this.origX,
+                y2: sinx + this.origY
+              })
+
+            } else {
+              this.drawingObject.set({
+                x2: pointer.x,
+                y2: pointer.y
+              })
+            }
+            inst.canvas.renderAll();
+            break;
+          case 'path':
+            if (!this.isDrawingPath) return
+
+            // update the last path command as we move the mouse
+            pointer = inst.canvas.getPointer(o.e)
+
+            if (!this.isDrawingCurve) {
+              this.updatedPath = ['L', pointer.x, pointer.y]
+            }
+
+            this.drawingObject.path.pop()
+
+
+            // shift key is down, jump angles
+            if (o.e.shiftKey && !this.isDrawingCurve) {
+              // last fix, placed point
+              let lastPoint = [...this.drawingObject.path].pop()
+              let startX = lastPoint[1]
+              let startY = lastPoint[2]
+
+              let x2 = pointer.x - startX
+              let y2 = pointer.y - startY
+              let r = Math.sqrt(x2 * x2 + y2 * y2)
+              let angle: any = (Math.atan2(y2, x2) / Math.PI * 180)
+
+              angle = (((angle + 7.5) % 360) / 15) * 15;
+
+              let cosx = r * Math.cos(angle * Math.PI / 180)
+              let sinx = r * Math.sin(angle * Math.PI / 180)
+
+              this.updatedPath[1] = cosx + startX
+              this.updatedPath[2] = sinx + startY
+            }
+
+
+            // detect and snap to closest line if within range
+            if (this.drawingObject.path.length > 1 && !this.isDrawingCurve) {
+              // foreach all points, except last
+              let snapPoints = [...this.drawingObject.path]
+              snapPoints.pop()
+              for (let p of snapPoints) {
+                // line
+                if ((p[0] === 'L' || p[0] === 'M') && this.inRange(10, pointer.x, pointer.y, p[1], p[2])) {
+                  this.updatedPath[1] = p[1]
+                  this.updatedPath[2] = p[2]
+                  break
+                }
+
+                // curve
+                if (p[0] === 'Q' && this.inRange(10, pointer.x, pointer.y, p[3], p[4])) {
+                  this.updatedPath[1] = p[3]
+                  this.updatedPath[2] = p[4]
+                  break
+                }
+
+              }
+            }
+
+            // curve creating
+            if (this.isMouseDown) {
+
+              if (!this.isDrawingCurve && this.drawingObject.path.length > 1) {
+
+                this.isDrawingCurve = true
+
+                // get last path position and remove last path so we can update it
+                let lastPath = this.drawingObject.path.pop()
+
+                if (lastPath[0] === 'Q') {
+                  this.updatedPath = ['Q', lastPath[3], lastPath[4], lastPath[3], lastPath[4]]
+                  this.rememberX = lastPath[3]
+                  this.rememberY = lastPath[4]
+                } else {
+                  this.updatedPath = ['Q', lastPath[1], lastPath[2], lastPath[1], lastPath[2]]
+                  this.rememberX = lastPath[1]
+                  this.rememberY = lastPath[2]
+                }
+
+              } else if (this.isDrawingCurve) {
+
+                // detect mouse move and calc Q position
+                let mouseMoveX = pointer.x - this.updatedPath[3]
+                let mouseMoveY = pointer.y - this.updatedPath[4]
+
+                this.updatedPath = [
+                  'Q',
+                  this.rememberX - mouseMoveX,
+                  this.rememberY - mouseMoveY,
+                  this.rememberX,
+                  this.rememberY
+                ]
+
+              }
+
+            }
+
+            // add new path
+            this.drawingObject.path.push(this.updatedPath)
+
+            // recalc path dimensions
+            let dims = this.drawingObject._calcDimensions();
+            this.drawingObject.set({
+              width: dims.width,
+              height: dims.height,
+              left: dims.left,
+              top: dims.top,
+              pathOffset: {
+                x: dims.width / 2 + dims.left,
+                y: dims.height / 2 + dims.top
+              },
+              dirty: true
+            })
+            inst.canvas.renderAll()
+            break;
+          case 'textbox':
+            if (this.origX > pointer.x) {
+              this.drawingObject.set({
+                left: Math.abs(pointer.x)
+              });
+            }
+
+            if (this.origY > pointer.y) {
+              this.drawingObject.set({
+                top: Math.abs(pointer.y)
+              });
+            }
+
+            this.drawingObject.set({
+              width: Math.abs(this.origX - pointer.x)
+            });
+            this.drawingObject.set({
+              height: Math.abs(this.origY - pointer.y)
+            });
+
+            this.canvas.renderAll();
+            break;
+          default:
+            break;
+        }
+
+      },
+      'mouse:up': (o: any) => {
+        switch (this.activeTool) {
+          case 'path':
+            this.isMouseDown = false;
+
+            if (this.isDrawingCurve) {
+              // place current curve by starting a new line
+              let pointer = this.canvas.getPointer(o.e);
+              this.drawingObject.path.push(['L', pointer.x, pointer.y])
+
+              // recalc path dimensions
+              let dims = this.drawingObject._calcDimensions()
+              this.drawingObject.set({
+                width: dims.width,
+                height: dims.height,
+                left: dims.left,
+                top: dims.top,
+                pathOffset: {
+                  x: dims.width / 2 + dims.left,
+                  y: dims.height / 2 + dims.top
+                },
+                dirty: true
+              })
+              this.drawingObject.setCoords()
+              this.canvas.renderAll()
+            }
+
+            this.isDrawingCurve = false;
+            break;
+          case 'textbox':
+            let textbox = new fabric.Textbox('Your text goes here...', {
+              left: this.drawingObject.left,
+              top: this.drawingObject.top,
+              width: this.drawingObject.width < 80 ? 80 : this.drawingObject.width,
+              fontSize: 18,
+              fontFamily: "'Open Sans', sans-serif"
+            });
+            this.canvas.remove(this.drawingObject);
+            this.canvas.add(textbox);
+            this.canvas.setActiveObject(textbox);
+            textbox.setControlsVisibility({
+              'mb': false
+            });
+            break;
+          default:
+            this.drawingObject = null;
+            break;
+        }
+      },
+      'object:moving': (e: any) => { },
+      'object:modified': (e: any) => { },
+      'object:scaling': (e: any) => { },
+      'selection:created': (e: any) => this.setActiveSelection(e.target),
+      'selection:updated': (e: any) => this.setActiveSelection(e.target),
+      'selection:cleared': (e: any) => this.setActiveSelection(null),
+      'object:rotating': (e: any) => {
+        if (e.e.shiftKey) {
+          e.target.snapAngle = 15;
+        } else {
+          e.target.snapAngle = false;
+        }
       }
     });
 
-    this.canvas.setWidth(this.size.width);
-    this.canvas.setHeight(this.size.height);
+    this.setCanvasSize();
+
+    // let options = {
+    //   distance: 10,
+    //   width: this.canvas.getWidth(),
+    //   height: this.canvas.getHeight(),
+    //   param: {
+    //     stroke: '#ebebeb',
+    //     strokeWidth: 1,
+    //     selectable: false,
+    //     excludeFromExport: true,
+    //   }
+    // };
+
+    // let gridLen = options.width / options.distance;
+
+    // for (var i = 0; i < gridLen; i++) {
+    //   var distance = i * options.distance,
+    //     horizontal = new fabric.Line([distance, 0, distance, options.width], options.param),
+    //     vertical = new fabric.Line([0, distance, options.width, distance], options.param);
+    //   this.canvas.add(horizontal);
+    //   this.canvas.add(vertical);
+    //   if (i % 5 === 0) {
+    //     horizontal.set({ stroke: '#cccccc' });
+    //     vertical.set({ stroke: '#cccccc' });
+    //   };
+    // };
 
     // get references to the html canvas element & its context
-    this.canvas.on('mouse:down', (e) => {
-      const canvasElement: any = document.getElementById('canvas');
-    });
+    // this.canvas.on('mouse:down', (e) => {
+    //   const canvasElement: any = document.getElementById('canvas');
+    // });
 
   }
 
+  cancelPathDrawing = () => {
+    // remove last line
+    this.drawingObject.path.pop()
 
-  /*------------------------Block elements------------------------*/
+    if (this.drawingObject.path.length > 1) {
 
-  // Block "Size"
+      let dims = this.drawingObject._calcDimensions();
+      this.drawingObject.set({
+        width: dims.width,
+        height: dims.height,
+        left: dims.left,
+        top: dims.top,
+        pathOffset: {
+          x: dims.width / 2 + dims.left,
+          y: dims.height / 2 + dims.top
+        },
+        dirty: true
+      })
+
+    } else {
+      // if there is no line, just the starting point then remove
+      this.canvas.remove(this.drawingObject);
+    }
+
+    this.canvas.renderAll();
+    this.drawingObject = null
+    this.isDrawingPath = false;
+  }
+
+  setActiveSelection = (activeSelection) => {
+    this.activeSelection = activeSelection;
+    this.setActiveTool('select');
+  }
 
   changeSize() {
     this.canvas.setWidth(this.size.width);
     this.canvas.setHeight(this.size.height);
   }
-
-  // Block "Add text"
-
-  addText() {
-    if (this.textString) {
-      const text = new fabric.IText(this.textString, {
-        left: 10,
-        top: 10,
-        fontFamily: 'helvetica',
-        angle: 0,
-        fill: '#000000',
-        scaleX: 0.5,
-        scaleY: 0.5,
-        fontWeight: '',
-        hasRotatingPoint: true
-      });
-
-      this.extend(text, this.randomId());
-      this.canvas.add(text);
-      this.selectItemAfterAdded(text);
-      this.textString = '';
-    }
-  }
-
-  // Block "Add images"
 
   getImgPolaroid(event: any) {
     const el = event.target;
@@ -156,11 +606,9 @@ export class FabricjsEditorComponent implements AfterViewInit {
       });
       this.extend(image, this.randomId());
       this.canvas.add(image);
-      this.selectItemAfterAdded(image);
+      this.canvas.setActiveObject(image);
     });
   }
-
-  // Block "Upload Image"
 
   addImageOnCanvas(url) {
     if (url) {
@@ -177,7 +625,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
         image.scaleToHeight(200);
         this.extend(image, this.randomId());
         this.canvas.add(image);
-        this.selectItemAfterAdded(image);
+        this.canvas.setActiveObject(image);
       });
     }
   }
@@ -196,60 +644,9 @@ export class FabricjsEditorComponent implements AfterViewInit {
     this.url = '';
   }
 
-  // Block "Add figure"
-
-  addFigure(figure) {
-    let add: any;
-    switch (figure) {
-      case 'rectangle':
-        add = new fabric.Rect({
-          width: 200, height: 100, left: 10, top: 10, angle: 0,
-          fill: '#3f51b5'
-        });
-        break;
-      case 'square':
-        add = new fabric.Rect({
-          width: 100, height: 100, left: 10, top: 10, angle: 0,
-          fill: '#4caf50'
-        });
-        break;
-      case 'triangle':
-        add = new fabric.Triangle({
-          width: 100, height: 100, left: 10, top: 10, fill: '#2196f3'
-        });
-        break;
-      case 'circle':
-        add = new fabric.Circle({
-          radius: 50, left: 10, top: 10, fill: '#ff5722'
-        });
-        break;
-    }
-    this.extend(add, this.randomId());
-    this.canvas.add(add);
-    this.selectItemAfterAdded(add);
-  }
-
-  /*Canvas*/
-
-  cleanSelect() {
-    this.canvas.discardActiveObject().renderAll();
-  }
-
-  selectItemAfterAdded(obj) {
-    this.canvas.discardActiveObject().renderAll();
-    this.canvas.setActiveObject(obj);
-  }
-
-  setCanvasFill() {
-    if (!this.props.canvasImage) {
-      this.canvas.backgroundColor = this.props.canvasFill;
-      this.canvas.renderAll();
-    }
-  }
-
   extend(obj, id) {
     obj.toObject = ((toObject) => {
-      return function() {
+      return function () {
         return fabric.util.object.extend(toObject.call(this), {
           id
         });
@@ -257,294 +654,8 @@ export class FabricjsEditorComponent implements AfterViewInit {
     })(obj.toObject);
   }
 
-  setCanvasImage() {
-    const self = this;
-    if (this.props.canvasImage) {
-      this.canvas.setBackgroundColor(new fabric.Pattern({ source: this.props.canvasImage, repeat: 'repeat' }), () => {
-        self.props.canvasFill = '';
-        self.canvas.renderAll();
-      });
-    }
-  }
-
   randomId() {
     return Math.floor(Math.random() * 999999) + 1;
-  }
-
-  /*------------------------Global actions for element------------------------*/
-
-  getActiveStyle(styleName, object) {
-    object = object || this.canvas.getActiveObject();
-    if (!object) { return ''; }
-
-    if (object.getSelectionStyles && object.isEditing) {
-      return (object.getSelectionStyles()[styleName] || '');
-    } else {
-      return (object[styleName] || '');
-    }
-  }
-
-  setActiveStyle(styleName, value: string | number, object: fabric.IText) {
-    object = object || this.canvas.getActiveObject() as fabric.IText;
-    if (!object) { return; }
-
-    if (object.setSelectionStyles && object.isEditing) {
-      const style = {};
-      style[styleName] = value;
-
-      if (typeof value === 'string') {
-        if (value.includes('underline')) {
-          object.setSelectionStyles({underline: true});
-        } else {
-          object.setSelectionStyles({underline: false});
-        }
-
-        if (value.includes('overline')) {
-          object.setSelectionStyles({overline: true});
-        } else {
-          object.setSelectionStyles({overline: false});
-        }
-
-        if (value.includes('line-through')) {
-          object.setSelectionStyles({linethrough: true});
-        } else {
-          object.setSelectionStyles({linethrough: false});
-        }
-      }
-
-      object.setSelectionStyles(style);
-      object.setCoords();
-
-    } else {
-      if (typeof value === 'string') {
-        if (value.includes('underline')) {
-        object.set('underline', true);
-        } else {
-          object.set('underline', false);
-        }
-
-        if (value.includes('overline')) {
-          object.set('overline', true);
-        } else {
-          object.set('overline', false);
-        }
-
-        if (value.includes('line-through')) {
-          object.set('linethrough', true);
-        } else {
-          object.set('linethrough', false);
-        }
-      }
-
-      object.set(styleName, value);
-    }
-
-    object.setCoords();
-    this.canvas.renderAll();
-  }
-
-
-  getActiveProp(name) {
-    const object = this.canvas.getActiveObject();
-    if (!object) { return ''; }
-
-    return object[name] || '';
-  }
-
-  setActiveProp(name, value) {
-    const object = this.canvas.getActiveObject();
-    if (!object) { return; }
-    object.set(name, value).setCoords();
-    this.canvas.renderAll();
-  }
-
-  clone() {
-    const activeObject = this.canvas.getActiveObject();
-    const activeGroup = this.canvas.getActiveObjects();
-
-    if (activeObject) {
-      let clone;
-      switch (activeObject.type) {
-        case 'rect':
-          clone = new fabric.Rect(activeObject.toObject());
-          break;
-        case 'circle':
-          clone = new fabric.Circle(activeObject.toObject());
-          break;
-        case 'triangle':
-          clone = new fabric.Triangle(activeObject.toObject());
-          break;
-        case 'i-text':
-          clone = new fabric.IText('', activeObject.toObject());
-          break;
-        case 'image':
-          clone = fabric.util.object.clone(activeObject);
-          break;
-      }
-      if (clone) {
-        clone.set({ left: 10, top: 10 });
-        this.canvas.add(clone);
-        this.selectItemAfterAdded(clone);
-      }
-    }
-  }
-
-  getId() {
-    this.props.id = this.canvas.getActiveObject().toObject().id;
-  }
-
-  setId() {
-    const val = this.props.id;
-    const complete = this.canvas.getActiveObject().toObject();
-    console.log(complete);
-    this.canvas.getActiveObject().toObject = () => {
-      complete.id = val;
-      return complete;
-    };
-  }
-
-  getOpacity() {
-    this.props.opacity = this.getActiveStyle('opacity', null) * 100;
-  }
-
-  setOpacity() {
-    this.setActiveStyle('opacity', parseInt(this.props.opacity, 10) / 100, null);
-  }
-
-  getFill() {
-    this.props.fill = this.getActiveStyle('fill', null);
-  }
-
-  setFill() {
-    this.setActiveStyle('fill', this.props.fill, null);
-  }
-
-  getLineHeight() {
-    this.props.lineHeight = this.getActiveStyle('lineHeight', null);
-  }
-
-  setLineHeight() {
-    this.setActiveStyle('lineHeight', parseFloat(this.props.lineHeight), null);
-  }
-
-  getCharSpacing() {
-    this.props.charSpacing = this.getActiveStyle('charSpacing', null);
-  }
-
-  setCharSpacing() {
-    this.setActiveStyle('charSpacing', this.props.charSpacing, null);
-  }
-
-  getFontSize() {
-    this.props.fontSize = this.getActiveStyle('fontSize', null);
-  }
-
-  setFontSize() {
-    this.setActiveStyle('fontSize', parseInt(this.props.fontSize, 10), null);
-  }
-
-  getBold() {
-    this.props.fontWeight = this.getActiveStyle('fontWeight', null);
-  }
-
-  setBold() {
-    this.props.fontWeight = !this.props.fontWeight;
-    this.setActiveStyle('fontWeight', this.props.fontWeight ? 'bold' : '', null);
-  }
-
-  setFontStyle() {
-    this.props.fontStyle = !this.props.fontStyle;
-    if (this.props.fontStyle) {
-      this.setActiveStyle('fontStyle', 'italic', null);
-    } else {
-      this.setActiveStyle('fontStyle', 'normal', null);
-    }
-  }
-
-  getTextDecoration() {
-    this.props.TextDecoration = this.getActiveStyle('textDecoration', null);
-  }
-
-  setTextDecoration(value) {
-    let iclass = this.props.TextDecoration;
-    if (iclass.includes(value)) {
-      iclass = iclass.replace(RegExp(value, 'g'), '');
-    } else {
-      iclass += ` ${value}`;
-    }
-    this.props.TextDecoration = iclass;
-    this.setActiveStyle('textDecoration', this.props.TextDecoration, null);
-  }
-
-  hasTextDecoration(value) {
-    return this.props.TextDecoration.includes(value);
-  }
-
-  getTextAlign() {
-    this.props.textAlign = this.getActiveProp('textAlign');
-  }
-
-  setTextAlign(value) {
-    this.props.textAlign = value;
-    this.setActiveProp('textAlign', this.props.textAlign);
-  }
-
-  getFontFamily() {
-    this.props.fontFamily = this.getActiveProp('fontFamily');
-  }
-
-  setFontFamily() {
-    this.setActiveProp('fontFamily', this.props.fontFamily);
-  }
-
-  /*System*/
-
-
-  removeSelected() {
-    const activeObject = this.canvas.getActiveObject();
-    const activeGroup = this.canvas.getActiveObjects();
-
-    if (activeObject) {
-      this.canvas.remove(activeObject);
-      // this.textString = '';
-    } else if (activeGroup) {
-      this.canvas.discardActiveObject();
-      const self = this;
-      activeGroup.forEach((object) => {
-        self.canvas.remove(object);
-      });
-    }
-  }
-
-  bringToFront() {
-    const activeObject = this.canvas.getActiveObject();
-    const activeGroup = this.canvas.getActiveObjects();
-
-    if (activeObject) {
-      activeObject.bringToFront();
-      activeObject.opacity = 1;
-    } else if (activeGroup) {
-      this.canvas.discardActiveObject();
-      activeGroup.forEach((object) => {
-        object.bringToFront();
-      });
-    }
-  }
-
-  sendToBack() {
-    const activeObject = this.canvas.getActiveObject();
-    const activeGroup = this.canvas.getActiveObjects();
-
-    if (activeObject) {
-      this.canvas.sendToBack(activeObject);
-      activeObject.sendToBack();
-      activeObject.opacity = 1;
-    } else if (activeGroup) {
-      this.canvas.discardActiveObject();
-      activeGroup.forEach((object) => {
-        object.sendToBack();
-      });
-    }
   }
 
   confirmClear() {
@@ -554,16 +665,46 @@ export class FabricjsEditorComponent implements AfterViewInit {
   }
 
   rasterize() {
-    const image = new Image();
-    image.src = this.canvas.toDataURL({format: 'png'});
-    const w = window.open('');
-    w.document.write(image.outerHTML);
+    var data = this.canvas.toDataURL();
+    var mimeType = 'image/png';
+    var extension = 'png'
+    const imageData = data.toString().replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+    const byteCharacters = atob(imageData);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i += 1) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const file = new Blob([byteArray], {
+      type: mimeType + ';base64'
+    });
+    const fileURL = window.URL.createObjectURL(file);
+
+    // IE doesn't allow using a blob object directly as link href
+    // instead it is necessary to use msSaveOrOpenBlob
+    if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+      window.navigator.msSaveOrOpenBlob(file);
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = fileURL;
+    link.download = 'image.' + extension;
+    link.dispatchEvent(new MouseEvent('click'));
+    setTimeout(() => {
+      // for Firefox it is necessary to delay revoking the ObjectURL
+      window.URL.revokeObjectURL(fileURL);
+    }, 60);
   }
 
   rasterizeSVG() {
-    const w = window.open('');
-    w.document.write(this.canvas.toSVG());
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(this.canvas.toSVG());
+    var element = document.createElement('a');
+    element.setAttribute('href', 'data:image/svg+xml;utf8,' + encodeURIComponent(this.canvas.toSVG()));
+    element.setAttribute('download', "image.svg");
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
   }
 
   saveCanvasToJSON() {
@@ -571,7 +712,6 @@ export class FabricjsEditorComponent implements AfterViewInit {
     localStorage.setItem('Kanvas', json);
     console.log('json');
     console.log(json);
-
   }
 
   loadCanvasFromJSON() {
@@ -598,10 +738,122 @@ export class FabricjsEditorComponent implements AfterViewInit {
     this.json = JSON.stringify(this.canvas, null, 2);
   }
 
-  resetPanels() {
-    this.textEditor = false;
-    this.imageEditor = false;
-    this.figureEditor = false;
+  setActiveTool = (id) => {
+    this.activeTool = id;
+    this.updateTool(this.activeTool);
+    
+    if (id !== 'select') {
+      this.canvas.discardActiveObject();
+      this.canvas.renderAll();
+      this.activeSelection = null;
+    }
+
+    this.isDrawingLineMode = false;
+    this.isDrawingPathMode = false;
+    this.canvas.isDrawingMode = false;
+    this.isDrawingTextMode = false;
+
+    this.canvas.defaultCursor = 'default';
+    this.canvas.selection = true;
+
+    this.canvas.forEachObject((o: any) => {
+      if (!o.excludeFromExport) {
+        o.selectable = true;
+        o.evented = true;
+      }
+    });
+
+    switch (id) {
+      case 'draw':
+        this.canvas.isDrawingMode = true;
+        break;
+      case 'line':
+      case 'rect':
+        this.canvas.defaultCursor = 'crosshair'
+        this.canvas.selection = false
+        this.canvas.forEachObject(o => {
+          o.selectable = false
+          o.evented = false
+        });
+        break;
+      case 'path':
+        this.isDrawingPathMode = true
+        this.canvas.defaultCursor = 'crosshair'
+        this.canvas.selection = false
+        this.canvas.forEachObject(o => {
+          o.selectable = false
+          o.evented = false
+        });
+        break;
+      case 'textbox':
+        this.isDrawingTextMode = true
+        this.canvas.defaultCursor = 'crosshair'
+        this.canvas.selection = false
+        this.canvas.forEachObject(o => {
+          o.selectable = false
+          o.evented = false
+        });
+        break;
+      default:
+        break;
+    }
   }
 
+  zoomFit = () => {
+    this.canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+  }
+
+  objectOption = (action: string) => {
+    if (!this.activeSelection) return;
+    switch (action) {
+      case "flip-h":
+        this.activeSelection.set('flipX', !this.activeSelection.flipX);
+        this.canvas.renderAll();
+        break;
+      case "flip-v":
+        this.activeSelection.set('flipY', !this.activeSelection.flipY);
+        this.canvas.renderAll();
+        break;
+      case "bring-fwd":
+        this.canvas.bringForward(this.activeSelection)
+        this.canvas.renderAll();
+        break;
+      case "bring-back":
+        this.canvas.sendBackwards(this.activeSelection)
+        this.canvas.renderAll();
+        break;
+      case "duplicate":
+        let clonedObjects = []
+        let activeObjects = this.canvas.getActiveObjects()
+        activeObjects.forEach(obj => {
+          obj.clone(clone => {
+            this.canvas.add(clone.set({
+              strokeUniform: true,
+              left: obj.aCoords.tl.x + 20,
+              top: obj.aCoords.tl.y + 20
+            }));
+
+            if (activeObjects.length === 1) {
+              this.canvas.setActiveObject(clone)
+            }
+            clonedObjects.push(clone)
+          })
+        })
+
+        if (clonedObjects.length > 1) {
+          let sel = new fabric.ActiveSelection(clonedObjects, {
+            canvas: this.canvas,
+          });
+          this.canvas.setActiveObject(sel)
+        }
+
+        this.canvas.requestRenderAll();
+
+        break;
+      case "delete":
+        this.canvas.getActiveObjects().forEach(obj => this.canvas.remove(obj))
+        this.canvas.discardActiveObject().requestRenderAll();
+        break;
+    }
+  }
 }
