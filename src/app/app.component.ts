@@ -25,8 +25,8 @@ export class AppComponent {
     this.canvas.saveCanvasToJSON();
   }
 
-  public loadCanvasFromJSON() {
-    this.canvas.loadCanvasFromJSON();
+  public loadCanvasFromJSON(event) {
+    this.canvas.loadCanvasFromJSON(event);
   }
 
   public confirmClear() {
@@ -54,14 +54,7 @@ export class AppComponent {
   }
 
   public drawingTool(event: any){
-    console.log(event.target.id);
-    this.activeTool = event.target.id;
-    this.canvas.setActiveTool(this.activeTool);
-  }
-
-  updateActiveTool(activeTool: string) {
-    console.log({activeTool});
-    this.activeTool = activeTool;
+    this.canvas.setActiveTool(event.target.id);
   }
 
   public objectOption(event: any){
@@ -77,5 +70,8 @@ export class AppComponent {
     this.canvas.changeSize();
   }
 
-
+  public setCanvasFill(event) {
+    console.log(event.target.value);
+    this.canvas.setCanvasFill(event.target.value);
+  }
 }

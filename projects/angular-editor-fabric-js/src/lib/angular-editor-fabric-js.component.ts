@@ -9,27 +9,11 @@ import { fabric } from 'fabric';
 
 export class FabricjsEditorComponent implements AfterViewInit {
   @ViewChild('htmlCanvas') htmlCanvas: ElementRef;
-  @Output() updateActiveTool = new EventEmitter<string>();
-
-  updateTool(value: string) {
-    this.updateActiveTool.emit(value);
-  }
 
   private canvas: fabric.Canvas;
   public props = {
-    canvasFill: '#ffffff',
-    canvasImage: '',
-    id: null,
-    opacity: null,
-    fill: null,
-    fontSize: null,
-    lineHeight: null,
-    charSpacing: null,
-    fontWeight: null,
-    fontStyle: null,
-    textAlign: null,
-    fontFamily: null,
-    TextDecoration: ''
+    canvasBackgroundColor: '#ffffff',
+    canvasBackgroundImage: '',
   };
 
   public textString: string;
@@ -104,7 +88,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
   mouseZoom(e) {
     // if (!e.ctrlKey) return;
     e.preventDefault()
-  
+
     let updatedZoom: any = this.canvas.getZoom().toFixed(2)
     let zoomAmount: any = (e.deltaY > 0) ? -5 : 5;
     updatedZoom = ((updatedZoom * 100) + zoomAmount) / 100
@@ -155,7 +139,8 @@ export class FabricjsEditorComponent implements AfterViewInit {
       selection: true,
       selectionBorderColor: 'blue',
       preserveObjectStacking: true,
-      svgViewportTransformation: false
+      svgViewportTransformation: false,
+      backgroundColor: '#fff'
     });
 
     fabric.Object.prototype.transparentCorners = false;
@@ -519,38 +504,6 @@ export class FabricjsEditorComponent implements AfterViewInit {
     });
 
     this.setCanvasSize();
-
-    // let options = {
-    //   distance: 10,
-    //   width: this.canvas.getWidth(),
-    //   height: this.canvas.getHeight(),
-    //   param: {
-    //     stroke: '#ebebeb',
-    //     strokeWidth: 1,
-    //     selectable: false,
-    //     excludeFromExport: true,
-    //   }
-    // };
-
-    // let gridLen = options.width / options.distance;
-
-    // for (var i = 0; i < gridLen; i++) {
-    //   var distance = i * options.distance,
-    //     horizontal = new fabric.Line([distance, 0, distance, options.width], options.param),
-    //     vertical = new fabric.Line([0, distance, options.width, distance], options.param);
-    //   this.canvas.add(horizontal);
-    //   this.canvas.add(vertical);
-    //   if (i % 5 === 0) {
-    //     horizontal.set({ stroke: '#cccccc' });
-    //     vertical.set({ stroke: '#cccccc' });
-    //   };
-    // };
-
-    // get references to the html canvas element & its context
-    // this.canvas.on('mouse:down', (e) => {
-    //   const canvasElement: any = document.getElementById('canvas');
-    // });
-
   }
 
   cancelPathDrawing = () => {
@@ -621,8 +574,8 @@ export class FabricjsEditorComponent implements AfterViewInit {
           cornerSize: 10,
           hasRotatingPoint: true
         });
-        image.scaleToWidth(200);
-        image.scaleToHeight(200);
+        image.scaleToWidth(image.width);
+        image.scaleToHeight(image.height);
         this.extend(image, this.randomId());
         this.canvas.add(image);
         this.canvas.setActiveObject(image);
@@ -635,6 +588,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
       const reader = new FileReader();
       reader.onload = (readerEvent) => {
         this.url = readerEvent.target.result;
+        this.addImageOnCanvas(this.url);
       };
       reader.readAsDataURL(event.target.files[0]);
     }
@@ -704,34 +658,43 @@ export class FabricjsEditorComponent implements AfterViewInit {
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
-
   }
 
   saveCanvasToJSON() {
-    const json = JSON.stringify(this.canvas);
-    localStorage.setItem('Kanvas', json);
+    const json = JSON.stringify(this.canvas); 
+    // localStorage.setItem('Kanvas', json);
     console.log('json');
     console.log(json);
+
+    var element = document.createElement('a');
+    element.setAttribute('href', "data:text/json;charset=utf-8," + encodeURIComponent(json));
+    element.setAttribute('download', "image.json");
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
   }
 
-  loadCanvasFromJSON() {
-    const CANVAS = localStorage.getItem('Kanvas');
-    console.log('CANVAS');
-    console.log(CANVAS);
+  loadCanvasFromJSON(event) {
+    if (event.target.files && event.target.files[0]) {
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        // and load everything from the same json
+        this.canvas.loadFromJSON(readerEvent.target.result, () => {
+          console.log('CANVAS untar');
+          console.log(readerEvent.target.result);
 
-    // and load everything from the same json
-    this.canvas.loadFromJSON(CANVAS, () => {
-      console.log('CANVAS untar');
-      console.log(CANVAS);
+          // making sure to render canvas at the end
+          this.canvas.renderAll();
 
-      // making sure to render canvas at the end
-      this.canvas.renderAll();
-
-      // and checking if object's "name" is preserved
-      console.log('this.canvas.item(0).name');
-      console.log(this.canvas);
-    });
-
+          // and checking if object's "name" is preserved
+          console.log('this.canvas.item(0).name');
+          console.log(this.canvas);
+        });
+      };
+      reader.readAsText(event.target.files[0]);
+    }
   }
 
   rasterizeJSON() {
@@ -740,8 +703,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
 
   setActiveTool = (id) => {
     this.activeTool = id;
-    this.updateTool(this.activeTool);
-    
+
     if (id !== 'select') {
       this.canvas.discardActiveObject();
       this.canvas.renderAll();
@@ -856,4 +818,13 @@ export class FabricjsEditorComponent implements AfterViewInit {
         break;
     }
   }
+
+  setCanvasFill(color: string) {
+    if (color) {
+      this.props.canvasBackgroundColor = color;
+      this.canvas.backgroundColor = this.props.canvasBackgroundColor;
+      this.canvas.renderAll();
+    }
+  }
+
 }
