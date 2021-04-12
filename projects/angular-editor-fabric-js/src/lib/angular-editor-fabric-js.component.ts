@@ -46,8 +46,8 @@ export class FabricjsEditorComponent implements AfterViewInit {
     return {
       // width: document.getElementById('canvasContainer').offsetWidth,
       // height: document.getElementById('canvasContainer').offsetHeight
-      width: 1024,
-      height: 768
+      width: 800,
+      height: 400
     }
   }
 
@@ -154,10 +154,15 @@ export class FabricjsEditorComponent implements AfterViewInit {
       this.origY = pointer.y;
     }
     let pos: any = {};
+    pos.x1 = this.origX;
+    pos.y1 = this.origY;
+    pos.x2 = pointer.x;
+    pos.y2 = pointer.y;
     pos.left = (pointer.x < this.origX) ? pointer.x : this.origX;
     pos.top = (pointer.y < this.origY) ? pointer.y : this.origY;
     pos.width = this.roundFloat(Math.abs(pointer.x - this.origX));
     pos.height = this.roundFloat(Math.abs(pointer.y - this.origY));
+    pos.angle = this.arrowHeadAngle(pos.x1, pos.y1, pos.x2, pos.y2);
     return pos;
   }
 
@@ -184,17 +189,15 @@ export class FabricjsEditorComponent implements AfterViewInit {
     this.canvas.on({
       'mouse:down': (o) => {
         let inst = this;
-        let pointer = inst.canvas.getPointer(o.e);
-        this.origX = pointer.x;
-        this.origY = pointer.y;
+        this.origX = this.origY = null;
         let position = this.getPosition(o);
         switch (this.activeTool) {
           case 'rect':
             this.drawingObject = new fabric.Rect({
-              left: this.origX,
-              top: this.origY,
-              width: pointer.x - this.origX,
-              height: pointer.y - this.origY,
+              left: position.left,
+              top: position.top,
+              width: position.width,
+              height: position.height,
               noScaleCache: false,
               strokeUniform: true,
               stroke: this.props.stroke,
@@ -221,7 +224,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
           case 'arrow':
           case 'dblarrow':
             this.isDrawingPath = true;
-            const line = new fabric.Line([this.origX, this.origY, pointer.x, pointer.y], {
+            const line = new fabric.Line([position.x1, position.y1, position.x2, position.y2], {
               strokeWidth: this.props.strokeWidth,
               stroke: this.props.stroke,
               strokeUniform: true,
@@ -230,11 +233,11 @@ export class FabricjsEditorComponent implements AfterViewInit {
             const toTriangle = new fabric.Triangle({
               originX: "center",
               originY: "center",
-              left: pointer.x,
-              top: pointer.y,
+              left: position.x2,
+              top: position.y2,
               width: headSize,
               height: headSize,
-              angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y),
+              angle: position.angle,
               fill: this.props.stroke,
               stroke: null,
               strokeWidth: 0,
@@ -256,11 +259,11 @@ export class FabricjsEditorComponent implements AfterViewInit {
               const fromTriangle = new fabric.Triangle({
                 originX: "center",
                 originY: "center",
-                left: pointer.x,
-                top: pointer.y,
+                left: position.x1,
+                top: position.y1,
                 width: headSize,
                 height: headSize,
-                angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y) + 180,
+                angle: position.angle + 180,
                 fill: this.props.stroke,
                 stroke: null,
                 strokeWidth: 0,
@@ -289,7 +292,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
 
             // if first point, no extras, just place the point
             if (!this.drawingObject) {
-              this.drawingObject = new fabric.Path(`M${pointer.x} ${pointer.y} L${pointer.x} ${pointer.y}`, {
+              this.drawingObject = new fabric.Path(`M${position.x1} ${position.y1} L${position.x2} ${position.y2}`, {
                 strokeWidth: this.props.strokeWidth,
                 stroke: this.props.stroke,
                 fill: 'transparent',
@@ -305,7 +308,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
 
             // not the first point, add a new line
             if (this.drawingObject) {
-              this.drawingObject.path.push(['L', pointer.x, pointer.y])
+              this.drawingObject.path.push(['L', position.x1, position.y1])
 
               // recalc path dimensions
               let dims = this.drawingObject._calcDimensions()
@@ -329,12 +332,12 @@ export class FabricjsEditorComponent implements AfterViewInit {
             break;
           case 'textbox':
             this.drawingObject = new fabric.Rect({
-              left: this.origX,
-              top: this.origY,
-              width: pointer.x - this.origX,
-              height: pointer.y - this.origY,
+              left: position.left,
+              top: position.top,
+              width: position.width,
+              height: position.height,
               strokeWidth: this.props.strokeWidth,
-              stroke: '#C00000',
+              stroke: this.props.stroke,
               fill: 'rgba(192, 0, 0, 0.2)',
               transparentCorners: false
             });
@@ -353,20 +356,12 @@ export class FabricjsEditorComponent implements AfterViewInit {
         let position = this.getPosition(o);
         switch (this.activeTool) {
           case 'rect':
-            if (this.origX > pointer.x) {
-              this.drawingObject.set({
-                left: Math.abs(pointer.x)
-              });
-            }
-            if (this.origY > pointer.y) {
-              this.drawingObject.set({
-                top: Math.abs(pointer.y)
-              });
-            }
-
+          case 'textbox':
             this.drawingObject.set({
-              width: Math.abs(this.origX - pointer.x),
-              height: Math.abs(this.origY - pointer.y)
+              top: position.top,
+              left: position.left,
+              width: position.width,
+              height: position.height
             });
 
             this.drawingObject.setCoords();
@@ -382,26 +377,31 @@ export class FabricjsEditorComponent implements AfterViewInit {
             break;
           case 'arrow':
           case 'dblarrow':
+            // Line
             this.drawingObject.objects[0].set({
-              x2: pointer.x,
-              y2: pointer.y
-            })
+              x2: position.x2,
+              y2: position.y2
+            });
+
+            // toTriangle
             this.drawingObject.objects[1].set({
-              left: pointer.x,
-              top: pointer.y,
-              angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y)
+              left: position.x2,
+              top: position.y2,
+              angle: position.angle
             })
+
             if (this.activeTool === 'dblarrow') {
+              // fromTriangle
               this.drawingObject.objects[2].set({
-                left: this.origX,
-                top: this.origY,
-                angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y) + 180
+                angle: position.angle + 180
               })
             }
+
             if (!this.drawingObject.isAttached) {
               inst.canvas.add(...this.drawingObject.objects);
               this.drawingObject.isAttached = true;
             }
+
             this.drawingObject.objects[0].setCoords();
             this.drawingObject.objects[1].setCoords();
             if (this.activeTool === 'dblarrow') {
@@ -412,27 +412,25 @@ export class FabricjsEditorComponent implements AfterViewInit {
           case 'line':
             if (o.e.shiftKey) {
               // calc angle
-              let startX = this.origX;
-              let startY = this.origY;
-              let x2 = pointer.x - this.origX
-              let y2 = pointer.y - this.origY
-              let r = Math.sqrt(x2 * x2 + y2 * y2)
-              let angle: any = (Math.atan2(y2, x2) / Math.PI * 180)
+              let x2 = position.x2 - position.x1;
+              let y2 = position.y2 - position.y1;
+              let r = Math.sqrt(x2 * x2 + y2 * y2);
+              let angle: any = (Math.atan2(y2, x2) / Math.PI * 180);
 
               angle = (((angle + 7.5) % 360) / 15) * 15;
 
-              let cosx = r * Math.cos(angle * Math.PI / 180)
-              let sinx = r * Math.sin(angle * Math.PI / 180)
+              let cosx = r * Math.cos(angle * Math.PI / 180);
+              let sinx = r * Math.sin(angle * Math.PI / 180);
 
               this.drawingObject.set({
-                x2: cosx + this.origX,
-                y2: sinx + this.origY
+                x2: cosx + position.x1,
+                y2: sinx + position.y1
               })
 
             } else {
               this.drawingObject.set({
-                x2: pointer.x,
-                y2: pointer.y
+                x2: position.x2,
+                y2: position.y2
               })
             }
             inst.canvas.renderAll();
@@ -551,28 +549,6 @@ export class FabricjsEditorComponent implements AfterViewInit {
             })
             inst.canvas.renderAll()
             break;
-          case 'textbox':
-            if (this.origX > pointer.x) {
-              this.drawingObject.set({
-                left: Math.abs(pointer.x)
-              });
-            }
-
-            if (this.origY > pointer.y) {
-              this.drawingObject.set({
-                top: Math.abs(pointer.y)
-              });
-            }
-
-            this.drawingObject.set({
-              width: Math.abs(this.origX - pointer.x)
-            });
-            this.drawingObject.set({
-              height: Math.abs(this.origY - pointer.y)
-            });
-
-            this.canvas.renderAll();
-            break;
           default:
             break;
         }
@@ -613,7 +589,8 @@ export class FabricjsEditorComponent implements AfterViewInit {
               top: this.drawingObject.top,
               width: this.drawingObject.width < 80 ? 80 : this.drawingObject.width,
               fontSize: 18,
-              fontFamily: "'Open Sans', sans-serif"
+              fontFamily: "'Open Sans', sans-serif",
+              fill: this.props.stroke
             });
             this.canvas.remove(this.drawingObject);
             this.canvas.add(textbox);
@@ -997,6 +974,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
   }
 
   setStrokeWidth(value) {
+    value = parseInt(value);
     this.props.strokeWidth = value;
     if (this.activeSelection) {
       this.activeSelection.set({

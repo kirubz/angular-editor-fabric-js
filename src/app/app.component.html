@@ -242,18 +242,27 @@
                 </button>
             </div>
             <h6>Object Props</h6>
-            <div class="form-group">
-                <label>Stroke Color</label>
-                <input type="color" class="form-control" [(ngModel)]="canvas.props.stroke" (change)="setStrokeColor($event)">
-            </div>
-            <div class="form-group">
-                <label>Stroke Width</label>
-                <input type="number" step="1" min="1" max="10" class="form-control" [(ngModel)]="canvas.props.strokeWidth" (change)="setStrokeWidth($event)">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Stroke Color</label>
+                        <input type="color" class="form-control" [(ngModel)]="canvas.props.stroke" (change)="setStrokeColor($event)">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Stroke Width</label>
+                        <input type="number" step="1" min="1" max="10" class="form-control" [(ngModel)]="canvas.props.strokeWidth" (change)="setStrokeWidth($event)">
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="card mb-3">
-        <div class="card-header">Add images</div>
+
+    <div class="card">
+        <div class="card-header p-2">
+            <h6 class="card-title m-0">Add Images</h6>
+        </div>
         <div class="card-body mpax-height p-2">
             <img class="images-item" (click)="getImgPolaroid($event)" src="../assets/img/l-shaped-arrow.svg">
             <img class="images-item" (click)="getImgPolaroid($event)" src="../assets/img/single_arrow.svg">
@@ -264,4 +273,3 @@
             <img class="images-item" (click)="getImgPolaroid($event)" src="../assets/img/arrow.svg">
         </div>
     </div>
-</div>
