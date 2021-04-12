@@ -14,6 +14,8 @@ export class FabricjsEditorComponent implements AfterViewInit {
   public props = {
     canvasBackgroundColor: '#ffffff',
     canvasBackgroundImage: '',
+    stroke: "#ff0000",
+    strokeWidth: 2
   };
 
   public textString: string;
@@ -131,6 +133,35 @@ export class FabricjsEditorComponent implements AfterViewInit {
     this.canvas.setHeight(this.size.height);
   }
 
+  arrowHeadSize = (strokeWidth) => {
+    let factor = 6;
+    let size = Math.round(factor + (strokeWidth * (factor / 2.0)));
+    return (strokeWidth > 0) ? size : 0;
+  }
+
+  roundFloat(floatNumber) {
+    return Math.round((floatNumber + Number.EPSILON) * 100.0) / 100.0;
+  }
+
+  arrowHeadAngle(x1, y1, x2, y2) {
+    return this.roundFloat((Math.atan2((y2 - y1), (x2 - x1)) * (180 / Math.PI)) + 90);
+  };
+
+  getPosition(options) {
+    let pointer = this.canvas.getPointer(options.e);
+    if (!this.origX || !this.origY) {
+      this.origX = pointer.x;
+      this.origY = pointer.y;
+    }
+    let pos: any = {};
+    pos.left = (pointer.x < this.origX) ? pointer.x : this.origX;
+    pos.top = (pointer.y < this.origY) ? pointer.y : this.origY;
+    pos.width = this.roundFloat(Math.abs(pointer.x - this.origX));
+    pos.height = this.roundFloat(Math.abs(pointer.y - this.origY));
+    return pos;
+  }
+
+
   ngAfterViewInit(): void {
 
     // setup front side canvas
@@ -156,6 +187,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
         let pointer = inst.canvas.getPointer(o.e);
         this.origX = pointer.x;
         this.origY = pointer.y;
+        let position = this.getPosition(o);
         switch (this.activeTool) {
           case 'rect':
             this.drawingObject = new fabric.Rect({
@@ -165,17 +197,89 @@ export class FabricjsEditorComponent implements AfterViewInit {
               height: pointer.y - this.origY,
               noScaleCache: false,
               strokeUniform: true,
+              stroke: this.props.stroke,
+              strokeWidth: this.props.strokeWidth,
+              fill: 'transparent',
             });
             this.extend(this.drawingObject, this.randomId());
             inst.canvas.add(this.drawingObject);
             break;
-          case 'line':
-            let pointerPoints = [this.origX, this.origY, this.origX, this.origY];
-            this.drawingObject = new fabric.Line(pointerPoints, {
-              strokeWidth: 1,
-              stroke: '#000000'
+          case 'circle':
+            this.drawingObject = new fabric.Ellipse({
+              left: position.left,
+              top: position.top,
+              rx: this.roundFloat(position.width / 2.0),
+              ry: this.roundFloat(position.height / 2.0),
+              fill: 'transparent',
+              stroke: this.props.stroke,
+              strokeWidth: this.props.strokeWidth,
+              strokeUniform: true,
             });
-            this.drawingObject.strokeUniform = true;
+            this.extend(this.drawingObject, this.randomId());
+            inst.canvas.add(this.drawingObject);
+            break;
+          case 'arrow':
+          case 'dblarrow':
+            this.isDrawingPath = true;
+            const line = new fabric.Line([this.origX, this.origY, pointer.x, pointer.y], {
+              strokeWidth: this.props.strokeWidth,
+              stroke: this.props.stroke,
+              strokeUniform: true,
+            })
+            let headSize = this.arrowHeadSize(this.props.strokeWidth);
+            const toTriangle = new fabric.Triangle({
+              originX: "center",
+              originY: "center",
+              left: pointer.x,
+              top: pointer.y,
+              width: headSize,
+              height: headSize,
+              angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y),
+              fill: this.props.stroke,
+              stroke: null,
+              strokeWidth: 0,
+              strokeDashArray: null,
+              selectable: false,
+              evented: false,
+              strokeUniform: true,
+            });
+
+            this.drawingObject = {
+              objects: [line, toTriangle],
+              selectable: false,
+              evented: false,
+              strokeUniform: true,
+              isAttached: false
+            };
+
+            if (this.activeTool === 'dblarrow') {
+              const fromTriangle = new fabric.Triangle({
+                originX: "center",
+                originY: "center",
+                left: pointer.x,
+                top: pointer.y,
+                width: headSize,
+                height: headSize,
+                angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y) + 180,
+                fill: this.props.stroke,
+                stroke: null,
+                strokeWidth: 0,
+                strokeDashArray: null,
+                selectable: false,
+                evented: false,
+                strokeUniform: true,
+              });
+              this.drawingObject.objects.push(fromTriangle);
+            }
+
+            break;
+          case 'line':
+            this.drawingObject = new fabric.Line([this.origX, this.origY, this.origX, this.origY], {
+              strokeWidth: this.props.strokeWidth,
+              stroke: this.props.stroke,
+              strokeUniform: true,
+            });
+
             this.extend(this.drawingObject, this.randomId());
             inst.canvas.add(this.drawingObject);
             break;
@@ -186,16 +290,16 @@ export class FabricjsEditorComponent implements AfterViewInit {
             // if first point, no extras, just place the point
             if (!this.drawingObject) {
               this.drawingObject = new fabric.Path(`M${pointer.x} ${pointer.y} L${pointer.x} ${pointer.y}`, {
-                strokeWidth: 1,
-                stroke: '#000000',
-                fill: 'transparent'
+                strokeWidth: this.props.strokeWidth,
+                stroke: this.props.stroke,
+                fill: 'transparent',
+                selectable: false,
+                evented: false,
+                strokeUniform: true,
               });
 
-              this.drawingObject.selectable = false;
-              this.drawingObject.evented = false;
-              this.drawingObject.strokeUniform = true;
+              this.extend(this.drawingObject, this.randomId());
               inst.canvas.add(this.drawingObject);
-
               return
             }
 
@@ -229,11 +333,13 @@ export class FabricjsEditorComponent implements AfterViewInit {
               top: this.origY,
               width: pointer.x - this.origX,
               height: pointer.y - this.origY,
-              strokeWidth: 1,
+              strokeWidth: this.props.strokeWidth,
               stroke: '#C00000',
               fill: 'rgba(192, 0, 0, 0.2)',
               transparentCorners: false
             });
+
+            this.extend(this.drawingObject, this.randomId());
             this.canvas.add(this.drawingObject);
             break;
           default:
@@ -244,13 +350,9 @@ export class FabricjsEditorComponent implements AfterViewInit {
         if (!this.drawingObject) return;
         let inst = this;
         let pointer = inst.canvas.getPointer(o.e);
-
+        let position = this.getPosition(o);
         switch (this.activeTool) {
           case 'rect':
-            this.drawingObject.stroke = '#000';
-            this.drawingObject.strokeWidth = 1;
-            this.drawingObject.fill = 'transparent';
-
             if (this.origX > pointer.x) {
               this.drawingObject.set({
                 left: Math.abs(pointer.x)
@@ -269,6 +371,43 @@ export class FabricjsEditorComponent implements AfterViewInit {
 
             this.drawingObject.setCoords();
             inst.canvas.renderAll();
+            break;
+          case 'circle':
+            this.drawingObject.set("left", position.left);
+            this.drawingObject.set("top", position.top);
+            this.drawingObject.set("rx", this.roundFloat(position.width / 2.0));
+            this.drawingObject.set("ry", this.roundFloat(position.height / 2.0));
+            this.drawingObject.setCoords();
+            inst.canvas.requestRenderAll();
+            break;
+          case 'arrow':
+          case 'dblarrow':
+            this.drawingObject.objects[0].set({
+              x2: pointer.x,
+              y2: pointer.y
+            })
+            this.drawingObject.objects[1].set({
+              left: pointer.x,
+              top: pointer.y,
+              angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y)
+            })
+            if (this.activeTool === 'dblarrow') {
+              this.drawingObject.objects[2].set({
+                left: this.origX,
+                top: this.origY,
+                angle: this.arrowHeadAngle(this.origX, this.origY, pointer.x, pointer.y) + 180
+              })
+            }
+            if (!this.drawingObject.isAttached) {
+              inst.canvas.add(...this.drawingObject.objects);
+              this.drawingObject.isAttached = true;
+            }
+            this.drawingObject.objects[0].setCoords();
+            this.drawingObject.objects[1].setCoords();
+            if (this.activeTool === 'dblarrow') {
+              this.drawingObject.objects[2].setCoords();
+            }
+            inst.canvas.requestRenderAll();
             break;
           case 'line':
             if (o.e.shiftKey) {
@@ -483,10 +622,22 @@ export class FabricjsEditorComponent implements AfterViewInit {
               'mb': false
             });
             break;
+          case 'arrow':
+          case 'dblarrow':
+            if (this.isDrawingPath) {
+              this.canvas.remove(...this.drawingObject.objects);
+              let group = new fabric.Group(this.drawingObject.objects, {
+                evented: false,
+              });
+              this.canvas.add(group);
+              this.canvas.requestRenderAll();
+              this.isDrawingPath = false;
+            }
           default:
             this.drawingObject = null;
             break;
         }
+
       },
       'object:moving': (e: any) => { },
       'object:modified': (e: any) => { },
@@ -615,6 +766,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
   confirmClear() {
     if (confirm('Are you sure?')) {
       this.canvas.clear();
+      this.setCanvasFill(this.props.canvasBackgroundColor);
     }
   }
 
@@ -661,7 +813,7 @@ export class FabricjsEditorComponent implements AfterViewInit {
   }
 
   saveCanvasToJSON() {
-    const json = JSON.stringify(this.canvas); 
+    const json = JSON.stringify(this.canvas);
     // localStorage.setItem('Kanvas', json);
     console.log('json');
     console.log(json);
@@ -728,9 +880,14 @@ export class FabricjsEditorComponent implements AfterViewInit {
     switch (id) {
       case 'draw':
         this.canvas.isDrawingMode = true;
+        this.canvas.freeDrawingBrush.color = this.props.stroke;
+        this.canvas.freeDrawingBrush.width = this.props.strokeWidth;
         break;
       case 'line':
+      case 'arrow':
+      case 'dblarrow':
       case 'rect':
+      case 'circle':
         this.canvas.defaultCursor = 'crosshair'
         this.canvas.selection = false
         this.canvas.forEachObject(o => {
@@ -826,5 +983,29 @@ export class FabricjsEditorComponent implements AfterViewInit {
       this.canvas.renderAll();
     }
   }
+
+  setStrokeColor(value) {
+    this.props.stroke = value;
+    if (this.activeSelection) {
+      console.log(this.activeSelection);
+      this.activeSelection.set({
+        stroke: value
+      });
+      this.canvas.renderAll();
+    }
+    this.canvas.freeDrawingBrush.color = value;
+  }
+
+  setStrokeWidth(value) {
+    this.props.strokeWidth = value;
+    if (this.activeSelection) {
+      this.activeSelection.set({
+        strokeWidth: value
+      });
+      this.canvas.renderAll();
+    }
+    this.canvas.freeDrawingBrush.width = value;
+  }
+
 
 }

@@ -23,9 +23,24 @@
                 <path fill="#fff" stroke="none" d="M349.091,0v124.516L124.516,349.091H0V512h162.909V387.484l224.574-224.574H512V0H349.091z M54.303,457.696v-54.303 h54.303v54.303H54.303z M457.696,108.605h-54.303V54.303h54.303V108.605z"></path>
             </svg>
         </button>
+        <button id="arrow" class="btn btn-primary" [ngClass]="{'active': canvas.activeTool === 'arrow'}" title="Arrow" (click)="drawingTool($event)">
+            <svg style="pointer-events: none;" x="0px" y="0px" viewBox="0 0 448 512" xml:space="preserve" width="24" height="24">
+                <path fill="#fff" stroke="#fff" transform="rotate(-45, 224, 256)" d="M313.941 216H12c-6.627 0-12 5.373-12 12v56c0 6.627 5.373 12 12 12h301.941v46.059c0 21.382 25.851 32.09 40.971 16.971l86.059-86.059c9.373-9.373 9.373-24.569 0-33.941l-86.059-86.059c-15.119-15.119-40.971-4.411-40.971 16.971V216z"></path>
+            </svg>
+        </button>
+        <button id="dblarrow" class="btn btn-primary" [ngClass]="{'active': canvas.activeTool === 'dblarrow'}" title="Double Arrow" (click)="drawingTool($event)">
+            <svg style="pointer-events: none;" x="0px" y="0px" viewBox="0 0 512 512" xml:space="preserve" width="24" height="24">
+                <path fill="#fff" stroke="#fff" transform="rotate(-45, 256, 256)" d="M377.941 169.941V216H134.059v-46.059c0-21.382-25.851-32.09-40.971-16.971L7.029 239.029c-9.373 9.373-9.373 24.568 0 33.941l86.059 86.059c15.119 15.119 40.971 4.411 40.971-16.971V296h243.882v46.059c0 21.382 25.851 32.09 40.971 16.971l86.059-86.059c9.373-9.373 9.373-24.568 0-33.941l-86.059-86.059c-15.119-15.12-40.971-4.412-40.971 16.97z"></path>
+            </svg>
+        </button>
         <button id="rect" class="btn btn-primary" [ngClass]="{'active': canvas.activeTool === 'rect'}" title="Rectangle" (click)="drawingTool($event)">
             <svg x="0px" y="0px" viewBox="0 0 512 512" style="pointer-events: none;" xml:space="preserve" width="24" height="24">
                 <path fill="#fff" stroke="none" d="m512 133.286v-98.857h-98.857v34.428h-314.286v-34.428h-98.857v98.857h34.429v245.429h-34.429v98.857h98.857v-34.428h314.286v34.428h98.857v-98.857h-34.429v-245.429zm-68.857-68.857h38.857v38.857h-38.857zm-413.143 0h38.857v38.857h-38.857zm38.857 383.142h-38.857v-38.857h38.857zm413.143 0h-38.857v-38.857h38.857zm-34.429-68.857h-34.428v34.429h-314.286v-34.429h-34.428v-245.428h34.428v-34.429h314.286v34.429h34.428z"/>
+            </svg>
+        </button>
+        <button id="circle" class="btn btn-primary" [ngClass]="{'active': canvas.activeTool === 'circle'}" title="Circle" (click)="drawingTool($event)">
+            <svg x="0px" y="0px" viewBox="0 0 512 512" style="pointer-events: none;" xml:space="preserve" width="24" height="24">
+                <path fill="none" stroke="#fff" stroke-width="40" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8z"></path>
             </svg>
         </button>
         <button id="path" class="btn btn-primary" [ngClass]="{'active': canvas.activeTool === 'path'}" title="Path" (click)="drawingTool($event)">
@@ -167,7 +182,8 @@
             <h6 class="card-title m-0">Object Options</h6>
         </div>
         <div class="card-body p-2">
-            <div class="btn-group">
+            <h6>Object Alignment</h6>
+            <div class="btn-group mb-3">
                 <button id="flip-h" title="Flip Horizontal" class="btn btn-secondary" (click)="objectOption($event)">
                     <svg width="24" height="24" style="pointer-events: none;" viewBox="0 0 16 20" xml:space="preserve">
                         <g transform="matrix(0 1.5365 1.5385 0 -5.0769 1.5495)" fill="#fff">
@@ -224,6 +240,15 @@
                         </g>
                     </svg>
                 </button>
+            </div>
+            <h6>Object Props</h6>
+            <div class="form-group">
+                <label>Stroke Color</label>
+                <input type="color" class="form-control" [(ngModel)]="canvas.props.stroke" (change)="setStrokeColor($event)">
+            </div>
+            <div class="form-group">
+                <label>Stroke Width</label>
+                <input type="number" step="1" min="1" max="10" class="form-control" [(ngModel)]="canvas.props.strokeWidth" (change)="setStrokeWidth($event)">
             </div>
         </div>
     </div>

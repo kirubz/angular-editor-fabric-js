@@ -74,4 +74,12 @@ export class AppComponent {
     console.log(event.target.value);
     this.canvas.setCanvasFill(event.target.value);
   }
+
+  public setStrokeColor(event) {
+    this.canvas.setStrokeColor(event.target.value)
+  }
+
+  public setStrokeWidth(event) {
+    this.canvas.setStrokeWidth(event.target.value)
+  }
 }
